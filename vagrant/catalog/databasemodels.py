@@ -1,8 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from passlib.apps import custom_app_context as pwd_context
+from sqlalchemy.orm import aliased
 import random
 import string
 import datetime
@@ -46,8 +47,8 @@ class Item(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String(32), nullable=False)
     desc = Column(String(250))
-    lastupdated = Column(DateTime, onupdate=datetime.datetime.now)
     cat_id = Column(Integer, ForeignKey('category.id'))
+    lastupdated = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     category = relationship(Category)
 
     @property

@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
-from databasemodels import Base, User
+from databasemodels import Base, User, Category, Item
 
 CLIENT_ID = json.loads(
     open('client_secret.json', 'r').read())['web']['client_id']
@@ -36,7 +36,9 @@ g_session = DBSession()
 
 @g_app.route('/authenticated', methods=['GET'])
 def authenticated():
-    return render_template('userHome.html', username=login_session['username'])
+    categories = g_session.query(Category).all()
+    items = g_session.query(Item).order_by(Item.lastupdated.asc()).all()
+    return render_template('userHome.html', categories = categories, items = items)
 
 
 @g_app.route('/', methods=['GET'])
@@ -44,8 +46,10 @@ def showLogin():
     state = ''.join(random.choice(string.ascii_uppercase + string.digits)
                     for x in range(32))
     login_session['state'] = state
-    # return "The current session state is %s" % login_session['state']
-    return render_template('index.html', STATE=state)
+
+    categories = g_session.query(Category).all()
+    items = g_session.query(Item).order_by(Item.lastupdated.desc()).all()
+    return render_template('index.html', STATE = state, categories = categories, items = items)
 
 
 @g_app.route('/oauth/google', methods=['POST'])
@@ -110,6 +114,7 @@ def gconnect():
 
     return json.dumps({'name': login_session['username']})
 
+
 @g_app.route('/gdisconnect')
 def gdisconnect():
     access_token = login_session.get('access_token')
@@ -139,6 +144,28 @@ def gdisconnect():
         response = make_response(json.dumps('Failed to revoke token for given user.', 400))
         response.headers['Content-Type'] = 'application/json'
         return response
+
+
+@g_app.route('/item/new/', methods=['GET', 'POST'])
+def newCategoryItem():
+    categories = g_session.query(Category).all()
+    if request.method == 'POST':
+        newItem = Item( title = request.form['name'], 
+                        desc = request.form['description'],
+                        cat_id = request.form['category'])
+        g_session.add(newItem)
+        g_session.commit()
+        result = "Item added successfully"
+        return render_template('additem.html', 
+                                categories = categories,
+                                result = result)
+    else:
+        return render_template('additem.html', categories = categories)
+
+
+# @g_app.route('/catalog/<string:cat_name>/items', methods=['GET'])
+# def getAllCategoryItems(cat_name)
+
 
 if __name__ == '__main__':
     g_app.debug = True
