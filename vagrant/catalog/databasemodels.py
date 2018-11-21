@@ -48,7 +48,8 @@ class Item(Base):
     title = Column(String(32), nullable=False)
     desc = Column(String(250))
     cat_id = Column(Integer, ForeignKey('category.id'))
-    lastupdated = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    lastupdated = Column(DateTime, server_default=func.now(),
+                         onupdate=func.now(), nullable=False)
     category = relationship(Category)
 
     @property
@@ -58,7 +59,7 @@ class Item(Base):
             "cat_id": self.id,
             "description": self.desc,
             "id": self.id,
-            "tiltle": self.title
+            "title": self.title
         }
 
 

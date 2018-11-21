@@ -37,42 +37,6 @@
 
   <div class="alert alert-success" id="result">
   </div>
-  <script>
-    function signIn() {
-      auth2.grantOfflineAccess({ 'redirect_uri': 'postmessage' }).then(signInCallback);
-    }
-
-    function signInCallback(json) {
-      console.log('inside callback fuction');
-      console.log(json);
-      authResult = json;
-      if (authResult['code']) {
-        //$('#signinButton').attr('style', 'display: none');
-        $.ajax({
-          type: 'POST',
-          url: '/oauth/google?state={{STATE}}',
-          processData: false,
-          data: authResult['code'],
-          contentType: 'application/octet-stream; charset=utf-8',
-          success: function (result) {
-            if (result) {
-              var obj = jQuery.parseJSON(result);
-              $('#result').html('Login Successful!...' + obj.name + '...Redirecting...')
-              setTimeout(function () {
-                window.location.href = "/authenticated";
-              }, 1000);
-
-            } else if (authResult['error']) {
-              console.log('There was an error: ' + authResult['error']);
-            } else {
-              $('#result').html('Failed to make a server-side call. Check your configuration and console.');
-            }
-          }
-
-        });
-      }
-    }
-  </script>
 
   <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
@@ -85,12 +49,16 @@
       <div class="collapse navbar-collapse" id="navbarResponsive">
         <ul class="navbar-nav ml-auto">
           <li class="nav-item active">
-            <a class="nav-link" href="#">Home
+            <a class="nav-link" href="{{url_for('home')}}">Home
               <span class="sr-only">(current)</span>
             </a>
           </li>
           <li class="nav-item active">
+            {% if authenticated == true %}
+            <a class="nav-link" href="#" onclick="signOut();">Logout</a>
+            {% else %}
             <a class="nav-link" href="#" onclick="signIn();">Login with Google</a>
+            {% endif %}
           </li>
         </ul>
       </div>
@@ -106,29 +74,117 @@
         <h2 class="my-4">All categories</h2>
         <div class="list-group">
           {% for i in categories %}
-          <a href="{{url_for('getAllItems', cat_name=i.name)}}" class="list-group-item">{{i.name}}</a>
+          <a href="{{url_for('getAllCategoryItems', cat_name=i.name)}}" class="list-group-item">{{i.name}}</a>
           {% endfor %}
         </div>
       </div>
 
-      <div class="col-lg-9">
-        <h2 class="my-4">Latest items</h2>
+
+      <div class="col-lg-6">
+        <h2 class="my-4">{{itemsHeading}}</h2>
         {% for j in items %}
         <div>
           <h6>
+            {% if request.path == "/" %}
+
             {% for category in categories if category.id == j.cat_id %}
-            <a href="#">{{j.title}}({{category.name}})</a>
+            <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}({{category.name}})</a>
             {% endfor %}
+
+            {% else %}
+            <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}</a>
+            {% endif %}
           </h6>
         </div>
         {% endfor %}
       </div>
-    </div>
-    <container>
 
-      <!-- Bootstrap core JavaScript -->
-      <script src="/static/jquery/jquery.min.js"></script>
-      <script src="/static/js/bootstrap.bundle.min.js"></script>
+      {% if authenticated == true %}
+      <div class="col-lg-3">
+        <h2 class="my-4">Options</h2>
+        <div class="list-group">
+          <h5><a href="{{url_for('newCategoryItem')}}">Add Item</a></h5>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {% if authenticated == true %}
+
+  <script>
+    function signOut() {
+      var auth2 = gapi.auth2.getAuthInstance();
+      auth2.signOut().then(function () {
+        console.log('User signed out.');
+      });
+      $.ajax(
+        {
+          url: '/gdisconnect',
+          success: function (result) {
+            if (result) {
+              var obj = jQuery.parseJSON(result);
+              $('#result').html(obj.message + '. Redirecting...')
+              setTimeout(function () {
+                window.location.href = "/";
+              }, 1000);
+            }
+            else {
+              console.log('Failed to signed out.');
+            }
+          }
+        }
+      );
+    }
+  </script>
+
+  {% else %}
+
+  <script>
+    function signIn() {
+      auth2.grantOfflineAccess({ 'redirect_uri': 'postmessage' }).then(signInCallback);
+    }
+
+    function signInCallback(json) {
+      console.log('inside callback fuction');
+      console.log(json);
+      authResult = json;
+      if (authResult['code']) {
+        //$('#signinButton').attr('style', 'display: none');
+        $.ajax(
+          {
+            type: 'POST',
+            url: '/oauth/google?state={{STATE}}',
+            processData: false,
+            data: authResult['code'],
+            contentType: 'application/octet-stream; charset=utf-8',
+            success: function (result) {
+              if (result) {
+                var obj = jQuery.parseJSON(result);
+                $('#result').html('Sucessfully logged in as ' + obj.name + '. Redirecting...')
+                setTimeout(function () {
+                  window.location.href = "/";
+                }, 1000);
+
+              }
+              else if (authResult['error']) {
+                console.log('There was an error: ' + authResult['error']);
+              }
+              else {
+                $('#result').html('Failed to make a server-side call. Check your configuration and console.');
+              }
+            }
+
+          });
+      }
+    }
+  </script>
+  {% endif %}
+
+  <!-- Bootstrap core JavaScript -->
+  <script src="/static/jquery/jquery.min.js"></script>
+  <script src="/static/js/bootstrap.bundle.min.js"></script>
 
 </body>
 

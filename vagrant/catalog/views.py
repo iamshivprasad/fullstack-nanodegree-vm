@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
-from databasemodels import Base, User, Category, Item
+from databasemodels import Base, Category, Item, User
 
 CLIENT_ID = json.loads(
     open('client_secret.json', 'r').read())['web']['client_id']
@@ -23,33 +23,47 @@ APPLICATION_NAME = "Catalog App"
 
 
 g_app = Flask(__name__)
-g_app.secret_key = os.urandom(24) 
+g_app.secret_key = os.urandom(24)
 
 # Connect to Database and create database session
 g_engine = create_engine('sqlite:///itemcatalog.db',
-                        connect_args={'check_same_thread':False})
+                         connect_args={'check_same_thread': False})
 Base.metadata.bind = g_engine
 
 DBSession = sessionmaker(bind=g_engine)
 g_session = DBSession()
 
+g_categories = g_session.query(Category).all()
 
-@g_app.route('/authenticated', methods=['GET'])
-def authenticated():
-    categories = g_session.query(Category).all()
-    items = g_session.query(Item).order_by(Item.lastupdated.asc()).all()
-    return render_template('userHome.html', categories = categories, items = items)
+global g_authenticated
+g_authenticated = False
+
+# @g_app.route('/authenticated', methods=['GET'])
 
 
-@g_app.route('/', methods=['GET'])
-def showLogin():
+def refreshState():
     state = ''.join(random.choice(string.ascii_uppercase + string.digits)
                     for x in range(32))
     login_session['state'] = state
 
-    categories = g_session.query(Category).all()
+
+@g_app.route('/', methods=['GET'])
+def home():
+    # categories = g_session.query(Category).all()
     items = g_session.query(Item).order_by(Item.lastupdated.desc()).all()
-    return render_template('index.html', STATE = state, categories = categories, items = items)
+    global g_authenticated
+    if 'username' not in login_session:
+        g_authenticated = False
+    else:
+        g_authenticated = True
+
+    refreshState()
+    return render_template('index.html',
+                           STATE=login_session['state'],
+                           categories=g_categories,
+                           items=items,
+                           authenticated=g_authenticated,
+                           itemsHeading="Latest Items")
 
 
 @g_app.route('/oauth/google', methods=['POST'])
@@ -66,11 +80,13 @@ def gconnect():
         oauth_flow.redirect_uri = 'postmessage'
         credentials = oauth_flow.step2_exchange(oauth_code)
     except FlowExchangeError:
-        response = make_response(json.dumps('Failed to upgrade auth code'), 401)
+        response = make_response(json.dumps(
+            'Failed to upgrade auth code'), 401)
         response.headers['Content-type'] = 'application/json'
 
     access_token = credentials.access_token
-    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s' % access_token)
+    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s' %
+           access_token)
     http_obj = httplib2.Http()
     result = json.loads(http_obj.request(url, 'GET')[1])
     if result.get('error') is not None:
@@ -112,6 +128,9 @@ def gconnect():
     login_session['picture'] = data['picture']
     login_session['email'] = data['email']
 
+    global g_authenticated
+    g_authenticated = True
+
     return json.dumps({'name': login_session['username']})
 
 
@@ -119,53 +138,78 @@ def gconnect():
 def gdisconnect():
     access_token = login_session.get('access_token')
     if access_token is None:
-        print ('Access Token is None')
-        response = make_response(json.dumps('Current user not connected.'), 401)
+        print('Access Token is None')
+        response = make_response(json.dumps(
+            'Current user not connected.'), 401)
         response.headers['Content-Type'] = 'application/json'
         return response
-    print ('In gdisconnect access token is %s', access_token)
-    print ('User name is: ')
-    print (login_session['username'])
+    print('In gdisconnect access token is %s', access_token)
+    print('User name is: ')
+    print(login_session['username'])
     url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' % login_session['access_token']
     h = httplib2.Http()
     result = h.request(url, 'GET')[0]
-    print ('result is ')
-    print (result)
+    print('result is ')
+    print(result)
     if result['status'] == '200':
         del login_session['access_token']
         del login_session['google_id']
         del login_session['username']
         del login_session['email']
         del login_session['picture']
-        response = make_response(json.dumps('Successfully disconnected.'), 200)
-        response.headers['Content-Type'] = 'application/json'
-        return response
+        # response = make_response(json.dumps('Successfully logged out.'), 200)
+        # response.headers['Content-Type'] = 'application/json'
+        global g_authenticated
+        g_authenticated = False
+        return json.dumps({'message': 'Successfully logged out'})
     else:
-        response = make_response(json.dumps('Failed to revoke token for given user.', 400))
-        response.headers['Content-Type'] = 'application/json'
-        return response
+        # response = make_response(json.dumps('Failed to revoke token for given user.', 400))
+        # response.headers['Content-Type'] = 'application/json'
+        return json.dumps({'message': 'Could not log out successfully'})
 
 
 @g_app.route('/item/new/', methods=['GET', 'POST'])
 def newCategoryItem():
-    categories = g_session.query(Category).all()
     if request.method == 'POST':
-        newItem = Item( title = request.form['name'], 
-                        desc = request.form['description'],
-                        cat_id = request.form['category'])
+        if request.form['state'] != login_session['state']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        newItem = Item(title=request.form['name'],
+                       desc=request.form['description'],
+                       cat_id=request.form['category'])
         g_session.add(newItem)
         g_session.commit()
         result = "Item added successfully"
-        return render_template('additem.html', 
-                                categories = categories,
-                                result = result)
+        return render_template('additem.html',
+                               categories=g_categories,
+                               result=result)
     else:
-        return render_template('additem.html', categories = categories)
+        refreshState()
+        return render_template('additem.html',
+                               STATE=login_session['state'],
+                               categories=g_categories)
 
 
-# @g_app.route('/catalog/<string:cat_name>/items', methods=['GET'])
-# def getAllCategoryItems(cat_name)
+@g_app.route('/catalog/<cat_name>/items', methods=['GET'])
+def getAllCategoryItems(cat_name):
+    category = list(cat for cat in g_categories if cat.name == cat_name)
+    items = g_session.query(Item).filter_by(cat_id=category[0].id)
+    refreshState()
+    return render_template('index.html',
+                           STATE=login_session['state'],
+                           categories=g_categories,
+                           items=items,
+                           authenticated=g_authenticated,
+                           itemsHeading=cat_name + " Items")
 
+
+@g_app.route('/catalog/<cat_name>/<item_title>', methods=['GET'])
+def getItemDesc(cat_name, item_title):
+    item = g_session.query(Item).filter_by(title=item_title)
+    refreshState()
+    return json.dumps({'Desc': item[0].desc})
 
 if __name__ == '__main__':
     g_app.debug = True
