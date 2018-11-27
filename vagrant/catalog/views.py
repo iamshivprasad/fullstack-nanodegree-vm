@@ -177,7 +177,7 @@ def newCategoryItem():
             return response
 
         newItem = Item(title=request.form['name'],
-                       desc=request.form['description'],
+                       desc=request.form['desc'],
                        cat_id=request.form['category'])
         g_session.add(newItem)
         g_session.commit()
@@ -209,7 +209,47 @@ def getAllCategoryItems(cat_name):
 def getItemDesc(cat_name, item_title):
     item = g_session.query(Item).filter_by(title=item_title)
     refreshState()
-    return json.dumps({'Desc': item[0].desc})
+    # return json.dumps({'Desc': item[0].desc})
+    return render_template( 'item_page.html',
+                            STATE = login_session['state'],
+                            item_title = item_title,
+                            desc = item[0].desc,
+                            authenticated=g_authenticated)
+
+
+@g_app.route('/catalog/<item_title>/edit', methods = ['GET', 'POST'])
+def editItem(item_title):
+    if request.method == 'POST':
+        if request.form['state'] != login_session['state']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        item = g_session.query(Item).filter_by(id = request.form['currentId'])
+        item[0].title = request.form['name']
+        item[0].desc = request.form['desc']
+        item[0].cat_id = request.form['category']
+        g_session.commit()
+        result = "Item modified successfully"
+
+        # category = list(cat for cat in g_categories if cat.id == cat_id)
+
+        return render_template( 'item_page.html',
+                                result = result,
+                                STATE = login_session['state'],
+                                item_title = item[0].title,
+                                desc = item[0].desc,
+                                authenticated=g_authenticated)
+    else:
+        refreshState()
+        item = g_session.query(Item).filter_by(title=item_title)
+        return render_template('edititem.html',
+                               currentTitle=item_title,
+                               currentId = item[0].id, 
+                               STATE=login_session['state'],
+                               desc = item[0].desc,
+                               categories=g_categories)
+
 
 if __name__ == '__main__':
     g_app.debug = True

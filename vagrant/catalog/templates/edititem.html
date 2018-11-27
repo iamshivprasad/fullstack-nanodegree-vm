@@ -64,16 +64,15 @@
 
             <div class="row">
                 <div class="col">
-                    <h2 class="my-4">Add Item</h2>
-                    <form name="url_for{{newCategoryItem}}" 
-                          method='POST'
-                          onsubmit="return validateForm()">
+                    <h2 class="my-4">Edit Item</h2>
+                    <form action="{{ url_for('editItem', item_title=currentTitle) }}" 
+                          method='POST' name="edit">
 
                         <p>Title:</p>
-                        <input type='text' size='30' name='name'><br><br>
+                        <input type='text' size='30' name='name' placeholder="{{currentTitle}}"><br><br>
 
                         <p>Description:</p>
-                        <input type='text' size='30' name='desc'><br><br>
+                        <input type='text' size='30' name='desc' placeholder="{{desc}}"><br><br>
 
                         <p>Category:</p>
                         <select name="category">
@@ -83,7 +82,8 @@
                         </select>
 
                         <input type="hidden" name="state" value="{{STATE}}">
-                        <input type='submit' value='Add'>
+                        <input type="hidden" name="currentId" value="{{currentId}}">
+                        <input type='submit' value='Update'>
 
                     </form>
                 </div>

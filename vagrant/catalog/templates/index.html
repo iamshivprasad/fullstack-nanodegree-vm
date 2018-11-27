@@ -92,8 +92,20 @@
             {% endfor %}
 
             {% else %}
+            {% for category in categories if category.id == j.cat_id %}
             <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}</a>
+            {% endfor %}
             {% endif %}
+
+            <!-- {% for category in categories if category.id == j.cat_id %}
+
+            {% if request.path == "/" %}
+            <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}({{category.name}})</a>
+            {% else %}
+            <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}</a>
+            {% endif %}            
+
+            {% endfor %} -->
           </h6>
         </div>
         {% endfor %}
