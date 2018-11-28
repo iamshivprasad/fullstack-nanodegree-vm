@@ -184,12 +184,14 @@ def newCategoryItem():
         result = "Item added successfully"
         return render_template('additem.html',
                                categories=g_categories,
-                               result=result)
+                               result=result,
+                               authenticated = g_authenticated)
     else:
         refreshState()
         return render_template('additem.html',
                                STATE=login_session['state'],
-                               categories=g_categories)
+                               categories=g_categories,
+                               authenticated = g_authenticated)
 
 
 @g_app.route('/catalog/<cat_name>/items', methods=['GET'])
@@ -232,8 +234,6 @@ def editItem(item_title):
         g_session.commit()
         result = "Item modified successfully"
 
-        # category = list(cat for cat in g_categories if cat.id == cat_id)
-
         return render_template( 'item_page.html',
                                 result = result,
                                 STATE = login_session['state'],
@@ -248,7 +248,37 @@ def editItem(item_title):
                                currentId = item[0].id, 
                                STATE=login_session['state'],
                                desc = item[0].desc,
-                               categories=g_categories)
+                               categories=g_categories,
+                               authenticated = g_authenticated)
+
+
+@g_app.route('/catalog/<item_title>/delete', methods = ['GET', 'POST'])
+def deleteItem(item_title):
+    if request.method == 'POST':
+        pageData = json.loads(request.data)
+        if pageData["state"]!= login_session['state']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        item = g_session.query(Item).filter_by(id = pageData["id"])
+        # item[0].title = request.form['name']
+        # item[0].desc = request.form['desc']
+        # item[0].cat_id = request.form['category']
+        g_session.delete(item[0])
+        g_session.commit()
+
+        return json.dumps({'message': 'Item deleted successfully'})
+    else:
+        refreshState()
+        item = g_session.query(Item).filter_by(title=item_title)
+        return render_template('deleteitem.html',
+                               item_title=item_title,
+                               itemId = item[0].id, 
+                               STATE=login_session['state'],
+                               desc = item[0].desc,
+                               categories=g_categories,
+                               authenticated = g_authenticated)
 
 
 if __name__ == '__main__':

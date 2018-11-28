@@ -7,7 +7,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <meta name="description" content="">
   <meta name="Shivprasad" content="">
-
   <title>My Catalog App</title>
 
   <!-- Bootstrap core CSS -->
@@ -30,13 +29,13 @@
       });
     });
   </script>
+  <script src="/static/js/main.js"></script>
 
 </head>
 
 <body>
 
-  <div class="alert alert-success" id="result">
-  </div>
+  <div class="alert alert-success" id="result">{{result}}</div>
 
   <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
@@ -57,7 +56,7 @@
             {% if authenticated == true %}
             <a class="nav-link" href="#" onclick="signOut();">Logout</a>
             {% else %}
-            <a class="nav-link" href="#" onclick="signIn();">Login with Google</a>
+            <a class="nav-link" href="#" onclick="signIn()">Login with Google</a>
             {% endif %}
           </li>
         </ul>
@@ -97,15 +96,6 @@
             {% endfor %}
             {% endif %}
 
-            <!-- {% for category in categories if category.id == j.cat_id %}
-
-            {% if request.path == "/" %}
-            <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}({{category.name}})</a>
-            {% else %}
-            <a href="{{url_for('getItemDesc', cat_name=category.name, item_title=j.title)}}">{{j.title}}</a>
-            {% endif %}            
-
-            {% endfor %} -->
           </h6>
         </div>
         {% endfor %}
@@ -123,37 +113,32 @@
     </div>
   </div>
 
-  {% if authenticated == true %}
 
   <script>
-    function signOut() {
-      var auth2 = gapi.auth2.getAuthInstance();
-      auth2.signOut().then(function () {
-        console.log('User signed out.');
-      });
-      $.ajax(
-        {
-          url: '/gdisconnect',
-          success: function (result) {
-            if (result) {
-              var obj = jQuery.parseJSON(result);
-              $('#result').html(obj.message + '. Redirecting...')
-              setTimeout(function () {
-                window.location.href = "/";
-              }, 1000);
-            }
-            else {
-              console.log('Failed to signed out.');
-            }
-          }
-        }
-      );
-    }
-  </script>
+    // function signOut() {
+    //   var auth2 = gapi.auth2.getAuthInstance();
+    //   auth2.signOut().then(function () {
+    //     console.log('User signed out.');
+    //   });
+    //   $.ajax(
+    //     {
+    //       url: '/gdisconnect',
+    //       success: function (result) {
+    //         if (result) {
+    //           var obj = jQuery.parseJSON(result);
+    //           $('#result').html(obj.message + '. Redirecting...')
+    //           setTimeout(function () {
+    //             window.location.href = "/";
+    //           }, 1000);
+    //         }
+    //         else {
+    //           console.log('Failed to signed out.');
+    //         }
+    //       }
+    //     }
+    //   );
+    // }
 
-  {% else %}
-
-  <script>
     function signIn() {
       auth2.grantOfflineAccess({ 'redirect_uri': 'postmessage' }).then(signInCallback);
     }
@@ -177,7 +162,7 @@
                 $('#result').html('Sucessfully logged in as ' + obj.name + '. Redirecting...')
                 setTimeout(function () {
                   window.location.href = "/";
-                }, 1000);
+                }, 3000);
 
               }
               else if (authResult['error']) {
@@ -191,13 +176,18 @@
           });
       }
     }
+
+        //     setTimeout(function () {
+        //     if (document.getElementById("result")) {
+        //         $('#alert-text').slideUp('300');
+        //     }
+        // }, 2000)
   </script>
-  {% endif %}
 
   <!-- Bootstrap core JavaScript -->
   <script src="/static/jquery/jquery.min.js"></script>
   <script src="/static/js/bootstrap.bundle.min.js"></script>
-
+  
 </body>
 
 </html>

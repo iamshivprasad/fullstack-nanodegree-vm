@@ -36,6 +36,7 @@
 
 <body>
 
+    <!-- <div class="alert alert-success" id="result">{{result}}</div> -->
     <div class="alert alert-success" id="result">{{result}}</div>
 
     <!-- Navigation -->
@@ -65,22 +66,14 @@
         </div>
     </nav>
 
-    <div class="container">
-        <h2>{{item_title}}</h2>
+    <div class="container" id="delete-cont">
+        <h2>Delete Item</h2>
         <div class="panel panel-default">
-            <div class="panel-body">{{desc}}</div>
+            <div class="panel-body">Are you sure you want to delete?</div>
+            <button onclick="deleteItem()">Confirm</button>
         </div>
-        <div><br>
-            {% if authenticated == true %}
-            <h5>
-                <span><a href="{{url_for('editItem', item_title=item_title)}}">Edit</a></span>
-                <span>|</span>
-                <span><a href="{{url_for('deleteItem', item_title=item_title)}}">Delete</a></span>
-            </h5>
-            {% endif %}
-        </div>
-
     </div>
+
 
     <script>
         function signIn() {
@@ -92,7 +85,6 @@
             console.log(json);
             authResult = json;
             if (authResult['code']) {
-                //$('#signinButton').attr('style', 'display: none');
                 $.ajax(
                     {
                         type: 'POST',
@@ -120,8 +112,33 @@
                     });
             }
         }
-    </script>
 
+        function deleteItem() {
+            $.ajax(
+                {
+                    url: '/catalog/{{item_title}}/delete',
+                    type: 'POST',
+                    processData: false,
+                    data: JSON.stringify({ "state": "{{STATE}}", "id": "{{itemId}}" }),
+                    contentType: 'application/json; charset=utf-8',
+                    success: function (result) {
+                        if (result) {
+                            document.getElementById("delete-cont").style.display = "none";
+                            var obj = jQuery.parseJSON(result);
+                            $('#result').html(obj.message + '. Redirecting...')
+                            setTimeout(function () {
+                                window.location.href = "/";
+                            }, 4000);
+                        }
+                        else {
+                            console.log('Failed to delete.');
+                        }
+                    }
+                }
+            );
+        }
+
+    </script>
     <!-- Bootstrap core JavaScript -->
     <script src="/static/jquery/jquery.min.js"></script>
     <script src="/static/js/bootstrap.bundle.min.js"></script>
