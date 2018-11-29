@@ -17,10 +17,12 @@ from sqlalchemy.orm import relationship, sessionmaker
 
 from databasemodels import Base, Category, Item, User
 
+
 CLIENT_ID = json.loads(
     open('client_secret.json', 'r').read())['web']['client_id']
 APPLICATION_NAME = "Catalog App"
 
+auth = HTTPBasicAuth()
 
 g_app = Flask(__name__)
 g_app.secret_key = os.urandom(24)
@@ -38,7 +40,13 @@ g_categories = g_session.query(Category).all()
 global g_authenticated
 g_authenticated = False
 
-# @g_app.route('/authenticated', methods=['GET'])
+
+@auth.verify_password
+def verify_password(username_or_token, password):
+    if 'username' not in login_session:
+        return False
+    else:
+        return True
 
 
 def refreshState():
@@ -104,8 +112,8 @@ def gconnect():
     stored_access_token = login_session.get('access_token')
     stored_google_id = login_session.get('google_id')
     if stored_access_token is not None and google_id == stored_google_id:
-        response = make_response(json.dumps('Current user is already connected.'),
-                                 200)
+        response = make_response(
+            json.dumps('Current user is already connected.'), 200)
         response.headers['Content-Type'] = 'application/json'
         return response
 
@@ -146,7 +154,9 @@ def gdisconnect():
     print('In gdisconnect access token is %s', access_token)
     print('User name is: ')
     print(login_session['username'])
-    url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' % login_session['access_token']
+    url = 'https://accounts.google.com/o/oauth2/revoke?token={}'.format(
+                                                login_session['access_token'])
+
     h = httplib2.Http()
     result = h.request(url, 'GET')[0]
     print('result is ')
@@ -157,18 +167,15 @@ def gdisconnect():
         del login_session['username']
         del login_session['email']
         del login_session['picture']
-        # response = make_response(json.dumps('Successfully logged out.'), 200)
-        # response.headers['Content-Type'] = 'application/json'
         global g_authenticated
         g_authenticated = False
         return json.dumps({'message': 'Successfully logged out'})
     else:
-        # response = make_response(json.dumps('Failed to revoke token for given user.', 400))
-        # response.headers['Content-Type'] = 'application/json'
         return json.dumps({'message': 'Could not log out successfully'})
 
 
 @g_app.route('/item/new/', methods=['GET', 'POST'])
+@auth.login_required
 def newCategoryItem():
     if request.method == 'POST':
         if request.form['state'] != login_session['state']:
@@ -185,13 +192,13 @@ def newCategoryItem():
         return render_template('additem.html',
                                categories=g_categories,
                                result=result,
-                               authenticated = g_authenticated)
+                               authenticated=g_authenticated)
     else:
         refreshState()
         return render_template('additem.html',
                                STATE=login_session['state'],
                                categories=g_categories,
-                               authenticated = g_authenticated)
+                               authenticated=g_authenticated)
 
 
 @g_app.route('/catalog/<cat_name>/items', methods=['GET'])
@@ -211,15 +218,15 @@ def getAllCategoryItems(cat_name):
 def getItemDesc(cat_name, item_title):
     item = g_session.query(Item).filter_by(title=item_title)
     refreshState()
-    # return json.dumps({'Desc': item[0].desc})
-    return render_template( 'item_page.html',
-                            STATE = login_session['state'],
-                            item_title = item_title,
-                            desc = item[0].desc,
-                            authenticated=g_authenticated)
+    return render_template('item_page.html',
+                           STATE=login_session['state'],
+                           item_title=item_title,
+                           desc=item[0].desc,
+                           authenticated=g_authenticated)
 
 
-@g_app.route('/catalog/<item_title>/edit', methods = ['GET', 'POST'])
+@g_app.route('/catalog/<item_title>/edit', methods=['GET', 'POST'])
+@auth.login_required
 def editItem(item_title):
     if request.method == 'POST':
         if request.form['state'] != login_session['state']:
@@ -227,44 +234,42 @@ def editItem(item_title):
             response.headers['Content-type'] = 'application/json'
             return response
 
-        item = g_session.query(Item).filter_by(id = request.form['currentId'])
+        item = g_session.query(Item).filter_by(id=request.form['currentId'])
         item[0].title = request.form['name']
         item[0].desc = request.form['desc']
         item[0].cat_id = request.form['category']
         g_session.commit()
         result = "Item modified successfully"
 
-        return render_template( 'item_page.html',
-                                result = result,
-                                STATE = login_session['state'],
-                                item_title = item[0].title,
-                                desc = item[0].desc,
-                                authenticated=g_authenticated)
+        return render_template('item_page.html',
+                               result=result,
+                               STATE=login_session['state'],
+                               item_title=item[0].title,
+                               desc=item[0].desc,
+                               authenticated=g_authenticated)
     else:
         refreshState()
         item = g_session.query(Item).filter_by(title=item_title)
         return render_template('edititem.html',
                                currentTitle=item_title,
-                               currentId = item[0].id, 
+                               currentId=item[0].id,
                                STATE=login_session['state'],
-                               desc = item[0].desc,
+                               desc=item[0].desc,
                                categories=g_categories,
-                               authenticated = g_authenticated)
+                               authenticated=g_authenticated)
 
 
-@g_app.route('/catalog/<item_title>/delete', methods = ['GET', 'POST'])
+@g_app.route('/catalog/<item_title>/delete', methods=['GET', 'POST'])
+@auth.login_required
 def deleteItem(item_title):
     if request.method == 'POST':
         pageData = json.loads(request.data)
-        if pageData["state"]!= login_session['state']:
+        if pageData["state"] != login_session['state']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
             response.headers['Content-type'] = 'application/json'
             return response
 
-        item = g_session.query(Item).filter_by(id = pageData["id"])
-        # item[0].title = request.form['name']
-        # item[0].desc = request.form['desc']
-        # item[0].cat_id = request.form['category']
+        item = g_session.query(Item).filter_by(id=pageData["id"])
         g_session.delete(item[0])
         g_session.commit()
 
@@ -274,11 +279,11 @@ def deleteItem(item_title):
         item = g_session.query(Item).filter_by(title=item_title)
         return render_template('deleteitem.html',
                                item_title=item_title,
-                               itemId = item[0].id, 
+                               itemId=item[0].id,
                                STATE=login_session['state'],
-                               desc = item[0].desc,
+                               desc=item[0].desc,
                                categories=g_categories,
-                               authenticated = g_authenticated)
+                               authenticated=g_authenticated)
 
 
 if __name__ == '__main__':
