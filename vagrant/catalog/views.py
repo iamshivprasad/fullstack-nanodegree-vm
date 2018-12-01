@@ -1,3 +1,7 @@
+"""
+Main module which contains various routes for the Catalog App
+"""
+
 import json
 import os
 import random
@@ -8,7 +12,6 @@ import requests
 from flask import (Flask, abort, flash, g, jsonify, make_response,
                    render_template, request)
 from flask import session as login_session
-from flask import url_for
 from flask_httpauth import HTTPBasicAuth
 from oauth2client.client import FlowExchangeError, flow_from_clientsecrets
 from sqlalchemy import create_engine
@@ -50,6 +53,9 @@ def verify_password(username_or_token, password):
 
 
 def refreshState():
+    """ This method refereshes the state token value.
+    This state is used to prevent CSRF.
+    """
     global login_session
     state = ''.join(random.choice(string.ascii_uppercase + string.digits)
                     for x in range(32))
@@ -58,6 +64,12 @@ def refreshState():
 
 @g_app.route('/', methods=['GET'])
 def home():
+    """ This is the landing page
+
+    Returns:
+    on GET: List all the available Catagories and latest modified items.
+    """
+
     items = g_session.query(Item).order_by(Item.lastupdated.desc()).all()
     global g_authenticated
     if 'username' not in login_session:
@@ -76,7 +88,8 @@ def home():
 
 @g_app.route('/oauth/google', methods=['POST'])
 def gconnect():
-    # global login_session
+    """ This method gets called once the user is authenticated by Google
+    """
     if request.args.get('state') != login_session['state']:
         response = make_response(json.dumps('Unauthorized!!!'), 401)
         response.headers['Content-type'] = 'application/json'
@@ -157,7 +170,9 @@ def gconnect():
 
 @g_app.route('/gdisconnect')
 def gdisconnect():
-    # global login_session
+    """ This method signs out the user from the app.
+    """
+
     access_token = login_session.get('access_token')
     if access_token is None:
         print('Access Token is None')
@@ -192,6 +207,15 @@ def gdisconnect():
 @g_app.route('/item/new/', methods=['GET', 'POST'])
 @auth.login_required
 def newCategoryItem():
+    """ Creates a new item in the Catalog
+
+    Returns:
+        on GET: Page with a form to create a new item
+        on POST: A new item gets created in the DB and
+        returns to the same page.
+        If the user is not authenticated, error is returned.
+    """
+
     if request.method == 'POST':
         if request.form['state'] != login_session['state']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
@@ -221,6 +245,16 @@ def newCategoryItem():
 
 @g_app.route('/catalog/<cat_name>/items', methods=['GET'])
 def getAllCategoryItems(cat_name):
+    """ Returns all the items in the specified category
+
+    Args:
+        cat_name: name of the category whose items need to be returned
+
+    Returns:
+        on GET:
+            Page is presented with all items in the requested Category
+    """
+
     category = list(cat for cat in g_categories if cat.name == cat_name)
 
     if not category:
@@ -246,6 +280,18 @@ def getAllCategoryItems(cat_name):
 
 @g_app.route('/catalog/<cat_name>/<item_title>', methods=['GET'])
 def getItemDesc(cat_name, item_title):
+    """ Returns the description of the selected item
+
+    Args:
+        cat_name: name of the category to which the item belong
+        item_title: name of the item
+
+    Returns:
+        on GET:
+            Page is presented with item description.
+            If the requester is the creator of the item, options to
+            edit and delete are visible.
+    """
     category = list(cat for cat in g_categories if cat.name == cat_name)
 
     if not category:
@@ -280,6 +326,18 @@ def getItemDesc(cat_name, item_title):
 @g_app.route('/catalog/<item_title>/edit', methods=['GET', 'POST'])
 @auth.login_required
 def editItem(item_title):
+    """ Method to update an item
+
+    Args:
+        item_title: name of the item
+
+    Returns:
+        on GET:
+            A form is presented to provide the details.
+        on POST:
+            Updates the existing item.
+            This operation can only be performed by the creator of the item
+    """
     if request.method == 'POST':
         if request.form['state'] != login_session['state']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
@@ -339,6 +397,18 @@ def editItem(item_title):
 @g_app.route('/catalog/<item_title>/delete', methods=['GET', 'POST'])
 @auth.login_required
 def deleteItem(item_title):
+    """ Deletes the requested
+
+    Args:
+        item_title: name of the item
+
+    Returns:
+        on GET:
+            User is asked to confirm deletion.
+        on POST:
+            Deletes the requested item and redirects to home page.
+            This operation can only be performed by the creator of the item
+    """
     if request.method == 'POST':
         pageData = json.loads(request.data)
         if pageData["state"] != login_session['state']:
@@ -387,6 +457,12 @@ def deleteItem(item_title):
 
 @g_app.route('/catalog.json')
 def getCatalog():
+    """ JSON endpoint returns all categories and items present in the Catalog
+
+    Returns:
+        on GET:
+            All categories and items in JSON format
+    """
     categories = DBSession().query(Category).options(
                                 joinedload(Category.items)).all()
     return jsonify(dict(
