@@ -71,21 +71,13 @@
         <div class="row">
             <div class="col">
                 <h2 class="my-4">Edit Item</h2>
-                <form action="{{ url_for('editItem', item_title=currentTitle) }}" method='POST' name="editForm">
+                <form action="{{ url_for('editItem', item_title=currentTitle) }}" method='POST' onsubmit="return validateForm()" name="editForm">
 
                     <p>Title:</p>
                     <input type='text' size='30' name='name' value="{{currentTitle}}"><br><br>
 
                     <p>Description:</p>
                     <input type='text' size='30' name='desc' value="{{desc}}"><br><br>
-
-                    <p>Category:</p>
-                    <select name="category">
-                        {% for i in categories %}
-                        <option value="{{i.id}}">{{i.name}}</option>
-                        {% endfor %}
-                    </select>
-
                     <input type="hidden" name="state" value="{{STATE}}">
                     <input type="hidden" name="currentId" value="{{currentId}}">
                     <input type='submit' value='Update'>

@@ -71,7 +71,7 @@
             <div class="panel-body">{{desc}}</div>
         </div>
         <div><br>
-            {% if authenticated == true %}
+            {% if isCreator == true %}
             <h5>
                 <span><a href="{{url_for('editItem', item_title=item_title)}}">Edit</a></span>
                 <span>|</span>

@@ -13,7 +13,7 @@ from flask_httpauth import HTTPBasicAuth
 from oauth2client.client import FlowExchangeError, flow_from_clientsecrets
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, joinedload
 
 from databasemodels import Base, Category, Item, User
 
@@ -35,10 +35,10 @@ Base.metadata.bind = g_engine
 DBSession = sessionmaker(bind=g_engine)
 g_session = DBSession()
 
-g_categories = g_session.query(Category).all()
-
 global g_authenticated
 g_authenticated = False
+
+g_categories = g_session.query(Category).all()
 
 
 @auth.verify_password
@@ -50,6 +50,7 @@ def verify_password(username_or_token, password):
 
 
 def refreshState():
+    global login_session
     state = ''.join(random.choice(string.ascii_uppercase + string.digits)
                     for x in range(32))
     login_session['state'] = state
@@ -57,7 +58,6 @@ def refreshState():
 
 @g_app.route('/', methods=['GET'])
 def home():
-    # categories = g_session.query(Category).all()
     items = g_session.query(Item).order_by(Item.lastupdated.desc()).all()
     global g_authenticated
     if 'username' not in login_session:
@@ -76,6 +76,7 @@ def home():
 
 @g_app.route('/oauth/google', methods=['POST'])
 def gconnect():
+    # global login_session
     if request.args.get('state') != login_session['state']:
         response = make_response(json.dumps('Unauthorized!!!'), 401)
         response.headers['Content-type'] = 'application/json'
@@ -136,6 +137,18 @@ def gconnect():
     login_session['picture'] = data['picture']
     login_session['email'] = data['email']
 
+    user = g_session.query(User).filter_by(
+        email=login_session['email']).first()
+    if not user:
+        user = User(username=login_session['username'],
+                    picture=login_session['picture'],
+                    email=login_session['email'])
+    g_session.add(user)
+    g_session.commit()
+    g_session.refresh(user)
+
+    login_session['user_id'] = user.id
+
     global g_authenticated
     g_authenticated = True
 
@@ -144,6 +157,7 @@ def gconnect():
 
 @g_app.route('/gdisconnect')
 def gdisconnect():
+    # global login_session
     access_token = login_session.get('access_token')
     if access_token is None:
         print('Access Token is None')
@@ -155,7 +169,7 @@ def gdisconnect():
     print('User name is: ')
     print(login_session['username'])
     url = 'https://accounts.google.com/o/oauth2/revoke?token={}'.format(
-                                                login_session['access_token'])
+        login_session['access_token'])
 
     h = httplib2.Http()
     result = h.request(url, 'GET')[0]
@@ -167,6 +181,7 @@ def gdisconnect():
         del login_session['username']
         del login_session['email']
         del login_session['picture']
+        del login_session['user_id']
         global g_authenticated
         g_authenticated = False
         return json.dumps({'message': 'Successfully logged out'})
@@ -185,7 +200,8 @@ def newCategoryItem():
 
         newItem = Item(title=request.form['name'],
                        desc=request.form['desc'],
-                       cat_id=request.form['category'])
+                       cat_id=request.form['category'],
+                       user_id=login_session['user_id'])
         g_session.add(newItem)
         g_session.commit()
         result = "Item added successfully"
@@ -205,6 +221,7 @@ def newCategoryItem():
 def getAllCategoryItems(cat_name):
     category = list(cat for cat in g_categories if cat.name == cat_name)
     items = g_session.query(Item).filter_by(cat_id=category[0].id)
+
     refreshState()
     return render_template('index.html',
                            STATE=login_session['state'],
@@ -218,11 +235,18 @@ def getAllCategoryItems(cat_name):
 def getItemDesc(cat_name, item_title):
     item = g_session.query(Item).filter_by(title=item_title)
     refreshState()
+
+    isCreator = False
+    if g_authenticated is True:
+        if login_session['user_id'] == item[0].user_id:
+            isCreator = True
+
     return render_template('item_page.html',
                            STATE=login_session['state'],
                            item_title=item_title,
                            desc=item[0].desc,
-                           authenticated=g_authenticated)
+                           authenticated=g_authenticated,
+                           isCreator=isCreator)
 
 
 @g_app.route('/catalog/<item_title>/edit', methods=['GET', 'POST'])
@@ -235,9 +259,14 @@ def editItem(item_title):
             return response
 
         item = g_session.query(Item).filter_by(id=request.form['currentId'])
+
+        if item[0].user_id != login_session['user_id']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
         item[0].title = request.form['name']
         item[0].desc = request.form['desc']
-        item[0].cat_id = request.form['category']
         g_session.commit()
         result = "Item modified successfully"
 
@@ -250,6 +279,12 @@ def editItem(item_title):
     else:
         refreshState()
         item = g_session.query(Item).filter_by(title=item_title)
+
+        if item[0].user_id != login_session['user_id']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
         return render_template('edititem.html',
                                currentTitle=item_title,
                                currentId=item[0].id,
@@ -270,6 +305,12 @@ def deleteItem(item_title):
             return response
 
         item = g_session.query(Item).filter_by(id=pageData["id"])
+
+        if item[0].user_id != login_session['user_id']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
         g_session.delete(item[0])
         g_session.commit()
 
@@ -277,6 +318,12 @@ def deleteItem(item_title):
     else:
         refreshState()
         item = g_session.query(Item).filter_by(title=item_title)
+
+        if item[0].user_id != login_session['user_id']:
+            response = make_response(json.dumps('Unauthorized!!!'), 401)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
         return render_template('deleteitem.html',
                                item_title=item_title,
                                itemId=item[0].id,
@@ -286,6 +333,17 @@ def deleteItem(item_title):
                                authenticated=g_authenticated)
 
 
+@g_app.route('/catalog.json')
+def getCatalog():
+    categories = DBSession().query(Category).options(
+                                joinedload(Category.items)).all()
+    return jsonify(dict(
+                    Category=[dict(
+                            category.serialize,
+                            Items=[i.serialize for i in category.items])
+                            for category in categories]))
+
+
 if __name__ == '__main__':
     g_app.debug = True
-    g_app.run(host='0.0.0.0', port=8000)
+    g_app.run(host='0.0.0.0', port=5000)
