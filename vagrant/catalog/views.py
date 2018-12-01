@@ -205,7 +205,9 @@ def newCategoryItem():
         g_session.add(newItem)
         g_session.commit()
         result = "Item added successfully"
+        refreshState()
         return render_template('additem.html',
+                               STATE=login_session['state'],
                                categories=g_categories,
                                result=result,
                                authenticated=g_authenticated)
@@ -220,7 +222,18 @@ def newCategoryItem():
 @g_app.route('/catalog/<cat_name>/items', methods=['GET'])
 def getAllCategoryItems(cat_name):
     category = list(cat for cat in g_categories if cat.name == cat_name)
+
+    if not category:
+        response = make_response(json.dumps('Invalid category'), 404)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
     items = g_session.query(Item).filter_by(cat_id=category[0].id)
+
+    if not items:
+        response = make_response(json.dumps('Invalid item'), 404)
+        response.headers['Content-type'] = 'application/json'
+        return response
 
     refreshState()
     return render_template('index.html',
@@ -233,18 +246,33 @@ def getAllCategoryItems(cat_name):
 
 @g_app.route('/catalog/<cat_name>/<item_title>', methods=['GET'])
 def getItemDesc(cat_name, item_title):
-    item = g_session.query(Item).filter_by(title=item_title)
+    category = list(cat for cat in g_categories if cat.name == cat_name)
+
+    if not category:
+        response = make_response(json.dumps('Invalid category'), 404)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
+    item = g_session.query(Item).\
+        filter(Item.title == item_title).\
+        filter(Item.cat_id == category[0].id).first()
+
+    if item is None:
+        response = make_response(json.dumps('Invalid item'), 404)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
     refreshState()
 
     isCreator = False
     if g_authenticated is True:
-        if login_session['user_id'] == item[0].user_id:
+        if login_session['user_id'] == item.user_id:
             isCreator = True
 
     return render_template('item_page.html',
                            STATE=login_session['state'],
                            item_title=item_title,
-                           desc=item[0].desc,
+                           desc=item.desc,
                            authenticated=g_authenticated,
                            isCreator=isCreator)
 
@@ -258,38 +286,52 @@ def editItem(item_title):
             response.headers['Content-type'] = 'application/json'
             return response
 
-        item = g_session.query(Item).filter_by(id=request.form['currentId'])
+        item = g_session.query(Item).filter_by(
+                            id=request.form['currentId']).first()
 
-        if item[0].user_id != login_session['user_id']:
+        if item is None:
+            response = make_response(json.dumps('Invalid item'), 404)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        if item.user_id != login_session['user_id']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
             response.headers['Content-type'] = 'application/json'
             return response
 
-        item[0].title = request.form['name']
-        item[0].desc = request.form['desc']
+        item.title = request.form['name']
+        item.desc = request.form['desc']
         g_session.commit()
         result = "Item modified successfully"
 
         return render_template('item_page.html',
                                result=result,
                                STATE=login_session['state'],
-                               item_title=item[0].title,
-                               desc=item[0].desc,
+                               item_title=item.title,
+                               desc=item.desc,
                                authenticated=g_authenticated)
     else:
         refreshState()
-        item = g_session.query(Item).filter_by(title=item_title)
 
-        if item[0].user_id != login_session['user_id']:
+        # Not filtering with user id
+        # in order to identify the unauthorized access
+        item = g_session.query(Item).filter_by(title=item_title).first()
+
+        if item is None:
+            response = make_response(json.dumps('Invalid item'), 404)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        if item.user_id != login_session['user_id']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
             response.headers['Content-type'] = 'application/json'
             return response
 
         return render_template('edititem.html',
                                currentTitle=item_title,
-                               currentId=item[0].id,
+                               currentId=item.id,
                                STATE=login_session['state'],
-                               desc=item[0].desc,
+                               desc=item.desc,
                                categories=g_categories,
                                authenticated=g_authenticated)
 
@@ -304,31 +346,41 @@ def deleteItem(item_title):
             response.headers['Content-type'] = 'application/json'
             return response
 
-        item = g_session.query(Item).filter_by(id=pageData["id"])
+        item = g_session.query(Item).filter_by(id=pageData["id"]).first()
 
-        if item[0].user_id != login_session['user_id']:
+        if item is None:
+            response = make_response(json.dumps('Invalid item'), 404)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        if item.user_id != login_session['user_id']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
             response.headers['Content-type'] = 'application/json'
             return response
 
-        g_session.delete(item[0])
+        g_session.delete(item)
         g_session.commit()
 
         return json.dumps({'message': 'Item deleted successfully'})
     else:
         refreshState()
-        item = g_session.query(Item).filter_by(title=item_title)
+        item = g_session.query(Item).filter_by(title=item_title).first()
 
-        if item[0].user_id != login_session['user_id']:
+        if item is None:
+            response = make_response(json.dumps('Invalid item'), 404)
+            response.headers['Content-type'] = 'application/json'
+            return response
+
+        if item.user_id != login_session['user_id']:
             response = make_response(json.dumps('Unauthorized!!!'), 401)
             response.headers['Content-type'] = 'application/json'
             return response
 
         return render_template('deleteitem.html',
                                item_title=item_title,
-                               itemId=item[0].id,
+                               itemId=item.id,
                                STATE=login_session['state'],
-                               desc=item[0].desc,
+                               desc=item.desc,
                                categories=g_categories,
                                authenticated=g_authenticated)
 
